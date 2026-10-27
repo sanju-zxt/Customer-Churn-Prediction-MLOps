@@ -1,4 +1,7 @@
 [core]
-    remote = localremote
+    remote = origin
 ['remote "localremote"']
     url = C:\Users\Sanju\Desktop\dvc-storage
+['remote "origin"']
+    url = s3://dvc
+    endpointurl = https://dagshub.com/sanju-zxt/Customer-Churn-Prediction-MLOps.s3
