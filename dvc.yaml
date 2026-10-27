@@ -16,8 +16,6 @@ stages:
       - train.py:
           - MINIMUM_AUC
           - RANDOM_STATE
-    outs:
-      - artifacts/model.joblib
     metrics:
       - artifacts/metrics.json:
           cache: false
