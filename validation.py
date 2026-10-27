@@ -1,8 +1,11 @@
 
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
+PROJECT_DIR = Path(__file__).resolve().parent
+DEFAULT_DATA_PATH = PROJECT_DIR / "data" / "customers.csv"
 
 REQUIRED_COLUMNS = [
     "tenure",
@@ -17,29 +20,38 @@ NUMERIC_COLUMNS = [
     "tenure",
     "monthly_charges",
     "support_calls",
+    "churn",
+]
+
+CATEGORICAL_COLUMNS = [
+    "contract",
+    "internet_service",
 ]
 
 
-def validate_data(file_path) -> pd.DataFrame:
-    """Load and validate the customer churn dataset.
-
-    Rejects missing values in numeric columns. Missing categorical
-    feature values are allowed because the training pipeline can impute
-    them. The churn target must never be missing.
-    """
+def validate_data(file_path=DEFAULT_DATA_PATH):
+    """Load and validate a customer churn dataset."""
 
     file_path = Path(file_path)
 
-    if not file_path.exists():
-        raise FileNotFoundError(f"Dataset not found: {file_path}")
+    if not file_path.is_absolute():
+        file_path = PROJECT_DIR / file_path
 
-    df = pd.read_csv(file_path)
-    df.columns = df.columns.str.strip()
+    if not file_path.exists():
+        raise FileNotFoundError(
+            f"Dataset not found: {file_path}"
+        )
+
+    try:
+        df = pd.read_csv(file_path)
+    except Exception as exc:
+        raise ValueError(
+            f"Unable to read dataset: {exc}"
+        ) from exc
 
     if df.empty:
         raise ValueError("Dataset is empty.")
 
-    # Validate required columns.
     missing_columns = [
         column
         for column in REQUIRED_COLUMNS
@@ -51,36 +63,59 @@ def validate_data(file_path) -> pd.DataFrame:
             f"Missing required columns: {missing_columns}"
         )
 
-    # Report missing values before enforcing the validation rules.
-    missing_counts = df[REQUIRED_COLUMNS].isna().sum()
-    missing_counts = missing_counts[missing_counts > 0]
-
-    if not missing_counts.empty:
-        print("Missing values found:")
-        print(missing_counts.to_string())
-
-    # Numeric features must be valid numbers.
     for column in NUMERIC_COLUMNS:
-        df[column] = pd.to_numeric(df[column], errors="coerce")
-
-    invalid_numeric = df[NUMERIC_COLUMNS].isna().sum()
-    invalid_numeric = invalid_numeric[invalid_numeric > 0]
-
-    if not invalid_numeric.empty:
-        raise ValueError(
-            "missing values in numeric columns: "
-            f"{invalid_numeric.to_dict()}"
+        df[column] = pd.to_numeric(
+            df[column],
+            errors="coerce",
         )
 
-    # The target cannot be missing.
-    if df["churn"].isna().any():
-        raise ValueError("missing values in target column: churn")
+        if df[column].isna().any():
+            raise ValueError(
+                f"missing values or invalid numeric values "
+                f"in '{column}'."
+            )
 
-    # Categorical fields can contain missing values, which the model
-    # pipeline handles using SimpleImputer.
-    print("\nData validation passed!")
-    print(f"Total rows: {len(df)}")
-    print("All required columns are present.")
-    print("Numeric features and target contain no missing values.")
+        if not np.isfinite(df[column].to_numpy()).all():
+            raise ValueError(
+                f"Non-finite numeric values in '{column}'."
+            )
+
+    if not df["churn"].isin([0, 1]).all():
+        raise ValueError(
+            "The 'churn' column must contain only 0 or 1."
+        )
+
+    if df["churn"].nunique() != 2:
+        raise ValueError(
+            "The dataset must contain both churn classes: 0 and 1."
+        )
+
+    if df["contract"].isna().any():
+        raise ValueError(
+            "Missing values detected in 'contract'."
+        )
+
+    for column in CATEGORICAL_COLUMNS:
+        values = df[column].dropna()
+
+        if not values.map(
+            lambda value: (
+                isinstance(value, str)
+                and bool(value.strip())
+            )
+        ).all():
+            raise ValueError(
+                f"Invalid categorical values in '{column}'."
+            )
 
     return df
+
+
+if __name__ == "__main__":
+    dataset = validate_data()
+
+    print("Data validation successful.")
+    print(f"Dataset shape: {dataset.shape}")
+    print("Missing values by column:")
+    print(dataset[REQUIRED_COLUMNS].isna().sum())
+    print(f"Churn rate: {dataset['churn'].mean():.2%}")

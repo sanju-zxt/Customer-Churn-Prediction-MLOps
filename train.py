@@ -1,3 +1,4 @@
+
 import argparse
 import json
 from pathlib import Path
@@ -7,8 +8,15 @@ import mlflow
 import mlflow.sklearn
 
 from sklearn.compose import ColumnTransformer
+from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score, roc_auc_score
+from sklearn.metrics import (
+    accuracy_score,
+    f1_score,
+    precision_score,
+    recall_score,
+    roc_auc_score,
+)
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
@@ -16,10 +24,14 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from validation import validate_data
 
 
-SEED = 42
-MINIMUM_AUC = 0.60
-TEST_SIZE = 0.20
-MAX_ITER = 1000
+PROJECT_DIR = Path(__file__).resolve().parent
+
+DATA_PATH = PROJECT_DIR / "data" / "customers.csv"
+ARTIFACTS_DIR = PROJECT_DIR / "artifacts"
+MODEL_PATH = ARTIFACTS_DIR / "model.joblib"
+METRICS_PATH = ARTIFACTS_DIR / "metrics.json"
+
+TARGET_COLUMN = "churn"
 
 NUMERIC_FEATURES = [
     "tenure",
@@ -32,29 +44,59 @@ CATEGORICAL_FEATURES = [
     "internet_service",
 ]
 
-TARGET = "churn"
+MINIMUM_AUC = 0.60
+RANDOM_STATE = 42
 
 
 def build_model():
-    preprocessor = ColumnTransformer(
-        [
-            ("numeric", StandardScaler(), NUMERIC_FEATURES),
+    """Create the preprocessing and classification pipeline."""
+
+    numeric_pipeline = Pipeline(
+        steps=[
+            ("imputer", SimpleImputer(strategy="median")),
+            ("scaler", StandardScaler()),
+        ]
+    )
+
+    categorical_pipeline = Pipeline(
+        steps=[
+            (
+                "imputer",
+                SimpleImputer(
+                    strategy="constant",
+                    fill_value="Missing",
+                ),
+            ),
+            (
+                "encoder",
+                OneHotEncoder(handle_unknown="ignore"),
+            ),
+        ]
+    )
+
+    preprocessing = ColumnTransformer(
+        transformers=[
+            (
+                "numeric",
+                numeric_pipeline,
+                NUMERIC_FEATURES,
+            ),
             (
                 "categorical",
-                OneHotEncoder(handle_unknown="ignore"),
+                categorical_pipeline,
                 CATEGORICAL_FEATURES,
             ),
         ]
     )
 
     return Pipeline(
-        [
-            ("preprocess", preprocessor),
+        steps=[
+            ("preprocessing", preprocessing),
             (
                 "classifier",
                 LogisticRegression(
-                    max_iter=MAX_ITER,
-                    random_state=SEED,
+                    max_iter=1000,
+                    random_state=RANDOM_STATE,
                 ),
             ),
         ]
@@ -62,108 +104,133 @@ def build_model():
 
 
 def main():
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description="Train and evaluate the customer churn model."
+    )
 
     parser.add_argument(
         "--check-quality-gate",
         action="store_true",
+        help="Fail when ROC-AUC is below the minimum threshold.",
     )
 
     args = parser.parse_args()
 
-    # Load and validate the dataset
-    df = validate_data()
+    ARTIFACTS_DIR.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
 
-    X = df[NUMERIC_FEATURES + CATEGORICAL_FEATURES]
-    y = df[TARGET]
+    df = validate_data(DATA_PATH)
 
-    # Split data into training and testing sets
+    features = NUMERIC_FEATURES + CATEGORICAL_FEATURES
+    X = df[features]
+    y = df[TARGET_COLUMN].astype(int)
+
     X_train, X_test, y_train, y_test = train_test_split(
         X,
         y,
-        test_size=TEST_SIZE,
-        random_state=SEED,
+        test_size=0.20,
+        random_state=RANDOM_STATE,
         stratify=y,
     )
 
-    # Create artifacts directory
-    Path("artifacts").mkdir(exist_ok=True)
+    model = build_model()
 
-    # Set up MLflow experiment
-    mlflow.set_experiment("Customer Churn Prediction")
+    tracking_dir = PROJECT_DIR / "mlruns"
+    tracking_dir.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
 
-    with mlflow.start_run() as run:
-        # Build and train the model
-        model = build_model()
+    mlflow.set_tracking_uri(tracking_dir.as_uri())
+    mlflow.set_experiment("customer-churn-prediction")
+
+    with mlflow.start_run():
         model.fit(X_train, y_train)
 
-        # Make predictions
         predictions = model.predict(X_test)
         probabilities = model.predict_proba(X_test)[:, 1]
 
-        # Calculate evaluation metrics
-        accuracy = accuracy_score(y_test, predictions)
-        auc = roc_auc_score(y_test, probabilities)
-
-        # Log parameters to MLflow
-        mlflow.log_params(
-            {
-                "model_type": "LogisticRegression",
-                "random_seed": SEED,
-                "test_size": TEST_SIZE,
-                "max_iter": MAX_ITER,
-                "dataset_rows": len(df),
-            }
+        auc_score = float(
+            roc_auc_score(y_test, probabilities)
         )
 
-        # Log metrics to MLflow
-        mlflow.log_metrics(
-            {
-                "accuracy": float(accuracy),
-                "auc": float(auc),
-            }
-        )
+        metrics = {
+            "accuracy": float(
+                accuracy_score(y_test, predictions)
+            ),
+            "precision": float(
+                precision_score(
+                    y_test,
+                    predictions,
+                    zero_division=0,
+                )
+            ),
+            "recall": float(
+                recall_score(
+                    y_test,
+                    predictions,
+                    zero_division=0,
+                )
+            ),
+            "f1_score": float(
+                f1_score(
+                    y_test,
+                    predictions,
+                    zero_division=0,
+                )
+            ),
+            "auc": auc_score,
+            "roc_auc": auc_score,
+            "minimum_auc": MINIMUM_AUC,
+        }
 
-        # Save model to MLflow
+        mlflow.log_param(
+            "model_type",
+            "LogisticRegression",
+        )
+        mlflow.log_param("test_size", 0.20)
+        mlflow.log_param("random_state", RANDOM_STATE)
+        mlflow.log_param("minimum_auc", MINIMUM_AUC)
+        mlflow.log_metrics(metrics)
+
+        joblib.dump(model, MODEL_PATH)
+
+        with open(
+            METRICS_PATH,
+            "w",
+            encoding="utf-8",
+        ) as file:
+            json.dump(metrics, file, indent=4)
+
         mlflow.sklearn.log_model(
-            model,
+            sk_model=model,
             artifact_path="model",
         )
 
-        # Save model locally
-        joblib.dump(model, "artifacts/model.joblib")
+        print("\nModel training completed.")
+        print(f"Training rows: {len(X_train)}")
+        print(f"Testing rows: {len(X_test)}")
+        print("\nEvaluation metrics:")
 
-        # Prepare metrics report
-        metrics = {
-            "accuracy": float(accuracy),
-            "auc": float(auc),
-            "minimum_auc": MINIMUM_AUC,
-            "run_id": run.info.run_id,
-            "rows": len(df),
-        }
+        for name, value in metrics.items():
+            print(f"{name}: {value:.4f}")
 
-        with open("artifacts/metrics.json", "w") as file:
-            json.dump(metrics, file, indent=4)
+        print(f"\nModel saved to: {MODEL_PATH}")
+        print(f"Metrics saved to: {METRICS_PATH}")
 
-        # Display results
-        print(f"Accuracy: {accuracy:.4f}")
-        print(f"ROC-AUC: {auc:.4f}")
-        print(f"MLflow run ID: {run.info.run_id}")
-
-        # Check model quality
         if args.check_quality_gate:
-            if auc < MINIMUM_AUC:
-                raise RuntimeError(
-                    f"Quality gate failed: ROC-AUC {auc:.4f} "
-                    f"is below {MINIMUM_AUC:.2f}"
+            if auc_score < MINIMUM_AUC:
+                raise SystemExit(
+                    f"QUALITY GATE FAILED: ROC-AUC {auc_score:.4f} "
+                    f"is below the required {MINIMUM_AUC:.2f}."
                 )
 
-            print("Quality gate passed.")
-        else:
-            print("Quality gate check was not requested.")
-
-        print("Model saved to artifacts/model.joblib")
-        print("Metrics saved to artifacts/metrics.json")
+            print(
+                f"\nQUALITY GATE PASSED: ROC-AUC {auc_score:.4f} "
+                f">= {MINIMUM_AUC:.2f}"
+            )
 
 
 if __name__ == "__main__":
