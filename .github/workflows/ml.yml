@@ -36,14 +36,15 @@ jobs:
           dvc remote modify origin --local access_key_id "$DAGSHUB_TOKEN"
           dvc remote modify origin --local secret_access_key "$DAGSHUB_TOKEN"
 
-      - name: Pull dataset from DagsHub
+      - name: Pull data and cached artifacts from DagsHub
         run: dvc pull -r origin
 
-      - name: Validate data
-        run: python validation.py
+      - name: Reproduce DVC pipeline
+        run: dvc repro
 
-      - name: Train model and enforce quality gate
-        run: python train.py --check-quality-gate
+      - name: Display model metrics
+        run: |
+          python -c "import json; print(json.dumps(json.load(open('artifacts/metrics.json')), indent=2))"
 
       - name: Run automated tests
         run: python -m pytest -v
