@@ -1,0 +1,28 @@
+
+# Python virtual environments
+.venv/
+.penv/
+.venv312/
+venv/
+
+# Python cache files
+__pycache__/
+*.py[cod]
+
+# Pytest
+.pytest_cache/
+.pytest-tmp/
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+
+# MLflow tracking data
+mlruns/
+mlflow.db
+mlflow.db-shm
+mlflow.db-wal
+
+# Generated model artifacts
+artifacts/
