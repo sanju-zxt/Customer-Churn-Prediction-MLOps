@@ -1,0 +1,41 @@
+schema: '2.0'
+stages:
+  validate:
+    cmd: python validation.py
+    deps:
+    - path: data/customers.csv
+      hash: md5
+      md5: 04ec70b3ef4a3cf6904c2b5e95945697
+      size: 54949
+    - path: validation.py
+      hash: md5
+      md5: 330636e77f5e2519f6431ab80f0b76bc
+      size: 2930
+  train:
+    cmd: python train.py --check-quality-gate
+    deps:
+    - path: data/customers.csv
+      hash: md5
+      md5: 04ec70b3ef4a3cf6904c2b5e95945697
+      size: 54949
+    - path: train.py
+      hash: md5
+      md5: 23181e92f08ced8df5aaeda33c6f0eb2
+      size: 5927
+    - path: validation.py
+      hash: md5
+      md5: 330636e77f5e2519f6431ab80f0b76bc
+      size: 2930
+    params:
+      train.py:
+        MINIMUM_AUC: 0.6
+        RANDOM_STATE: 42
+    outs:
+    - path: artifacts/metrics.json
+      hash: md5
+      md5: 87ce5011e1e5976f94b93d5d37ab6e9e
+      size: 229
+    - path: artifacts/model.joblib
+      hash: md5
+      md5: fbf734a3e7cceabddc4fa0838333e0a4
+      size: 4490

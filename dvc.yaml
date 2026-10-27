@@ -1,0 +1,23 @@
+
+stages:
+  validate:
+    cmd: python validation.py
+    deps:
+      - validation.py
+      - data/customers.csv
+
+  train:
+    cmd: python train.py --check-quality-gate
+    deps:
+      - train.py
+      - validation.py
+      - data/customers.csv
+    params:
+      - train.py:
+          - MINIMUM_AUC
+          - RANDOM_STATE
+    outs:
+      - artifacts/model.joblib
+    metrics:
+      - artifacts/metrics.json:
+          cache: false
