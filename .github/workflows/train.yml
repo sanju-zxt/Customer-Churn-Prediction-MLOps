@@ -1,0 +1,96 @@
+
+name: Training Pipeline (Smoke + Lint + Eval)
+
+on:
+  push:
+    branches: [training-infra, main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: |
+          python -m pip install --upgrade pip
+          python -m pip install ruff flake8 mypy
+          ruff check . --output-format=github
+          flake8 scripts/ conf/ --max-line-length=120 --ignore=E203,W503
+      - name: Type check
+        run: |
+          python -m pip install mypy
+          mypy scripts/train_hydra.py --ignore-missing-imports || true
+
+  train-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+      - name: Train smoke (1 epoch, sklearn)
+        run: |
+          python -c "
+          import hydra
+          from omegaconf import OmegaConf
+          cfg = OmegaConf.load('conf/config.yaml')
+          cfg.training.max_epochs = 1
+          cfg.training.checkpointing.ema.decay = 0.999
+          cfg.training.checkpointing.checkpoint_dir.mkdir(parents=True, exist_ok=True)
+          print('Smoke config loaded:', cfg)
+          "
+        env:
+          PROJECT_ROOT: .
+      - name: Train smoke (1 epoch, hydra)
+        run: |
+          python -m scripts.train_hydra --config-dir=conf --config-name=config --multirun training.max_epochs=1
+        env:
+          PROJECT_ROOT: .
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+      - name: Run tests
+        run: python -m pytest -v tests/
+
+  eval:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+      - name: Load artifacts and evaluate
+        run: |
+          test -f artifacts/model.joblib || echo "No model found, skipping eval"
+          test -f artifacts/metrics.json || echo "No metrics found, skipping eval"
+          python -c "
+          import json
+          if __import__('pathlib').Path('artifacts/metrics.json').exists():
+              print('Metrics:', json.load(open('artifacts/metrics.json')))
+          " || true

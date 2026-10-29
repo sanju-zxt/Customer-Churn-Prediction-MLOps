@@ -1,4 +1,5 @@
 defaults:
   - default
+  - distributed
 
 target: default

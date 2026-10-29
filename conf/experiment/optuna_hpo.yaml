@@ -1,0 +1,28 @@
+name: optuna_hpo
+mlflow:
+  tracking_uri: ${oc.env:PROJECT_ROOT,.}/mlruns
+  experiment_name: customer-churn-hpo
+  run_name: optuna_${now:%Y%m%d_%H%M%S}
+  log_params: true
+  log_metrics: true
+  log_artifacts: true
+  log_model: true
+optuna:
+  n_trials: 20
+  timeout: 3600
+  direction: maximize
+  sampler: TPESampler
+  pruner: MedianPruner
+  study_name: churn_hpo
+  search_space:
+    learning_rate:
+      type: loguniform
+      low: 0.00001
+      high: 0.01
+    C:
+      type: loguniform
+      low: 0.01
+      high: 10.0
+    batch_size:
+      type: categorical
+      choices: [16, 32, 64, 128]

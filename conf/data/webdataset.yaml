@@ -1,0 +1,10 @@
+name: webdataset
+source: webdataset
+path: ${oc.env:PROJECT_ROOT,.}/data/npz_shards
+format: npz
+shard_pattern: "shard-{000000..999999}.tar"
+batch_size: 32
+num_workers: 4
+shuffle: true
+cache_dir: /tmp/webdataset_cache
+split_ratio: 0.8
