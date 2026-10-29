@@ -8,3 +8,7 @@ dvc==3.56.0
 fastapi==0.115.4
 uvicorn==0.32.0
 httpx==0.28.1
+piper-tts==1.8.0
+
+# Optional: for local STT privacy mode (requires C++ compiler to build)
+whisper-cpp-python==0.1.8
