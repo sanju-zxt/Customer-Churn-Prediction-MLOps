@@ -1,0 +1,18 @@
+defaults:
+  - model: logistic_regression
+  - data: customer_churn
+  - training: default
+  - experiment: default
+  - _self_
+
+hydra:
+  run:
+    dir: ${oc.env:PROJECT_ROOT,.}/outputs/${now:%Y-%m-%d_%H-%M-%S}
+  sweep:
+    dir: ${oc.env:PROJECT_ROOT,.}/multirun/${now:%Y-%m-%d_%H-%M-%S}
+    subdir: ${hydra.job.config_name}/${hydra.job.num:02d}
+
+project:
+  name: customer-churn-prediction
+  seed: 42
+  random_state: 42

@@ -1,0 +1,4 @@
+defaults:
+  - customer_churn
+
+target: customer_churn

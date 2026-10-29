@@ -1,0 +1,11 @@
+name: default
+seed: 42
+random_state: 42
+test_size: 0.20
+quality_gate:
+  minimum_auc: 0.60
+checkpointing:
+  save_model: true
+  save_metrics: true
+  model_path: ${oc.env:PROJECT_ROOT,.}/artifacts/model.joblib
+  metrics_path: ${oc.env:PROJECT_ROOT,.}/artifacts/metrics.json
