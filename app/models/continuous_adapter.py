@@ -90,6 +90,15 @@ class TransformerCTCModel(nn.Module):
             zero_infinity=True,
         )
 
+        # Auxiliary isolated loss head for frame-level classification
+        self.auxiliary_isolated_head = nn.ModuleDict(
+            {
+                lang: nn.Linear(config.hidden_dim, config.vocab_size)
+                for lang in config.languages
+            }
+        )
+        self.cross_entropy_loss = nn.CrossEntropyLoss(ignore_index=-100)
+
         self._init_weights()
 
     def _init_weights(self):
@@ -133,6 +142,28 @@ class TransformerCTCModel(nn.Module):
             targets,
             input_lengths,
             target_lengths,
+        )
+
+    def compute_auxiliary_isolated_loss(
+        self,
+        features: torch.Tensor,
+        frame_targets: torch.Tensor,
+        language: str = "en",
+    ) -> torch.Tensor:
+        """Frame-level auxiliary loss for isolated sign classification."""
+        if language not in self.auxiliary_isolated_head:
+            language = self.config.languages[0]
+        head = self.auxiliary_isolated_head[language]
+        predictions = head(features)
+        # predictions: (batch, seq_len, vocab_size)
+        # frame_targets: (batch, seq_len)
+        predictions_flat = predictions.reshape(-1, predictions.size(-1))
+        targets_flat = frame_targets.reshape(-1)
+        mask = targets_flat >= 0
+        if mask.sum() == 0:
+            return torch.tensor(0.0, device=predictions.device, requires_grad=True)
+        return self.cross_entropy_loss(
+            predictions_flat[mask], targets_flat[mask]
         )
 
 
@@ -277,6 +308,12 @@ class ContinuousAdapter(ModelAdapter):
             outputs.append(chunk_logits)
 
         concatenated = torch.cat(outputs, dim=1)
+        # Trim overlap regions from concatenated output
+        if len(outputs) > 1 and overlap > 0:
+            trimmed_outputs = [outputs[0]]
+            for out in outputs[1:]:
+                trimmed_outputs.append(out[:, overlap:, :])
+            concatenated = torch.cat(trimmed_outputs, dim=1)
         return concatenated
 
     def _ctc_decode(
@@ -307,6 +344,6 @@ class ContinuousAdapter(ModelAdapter):
         predictions: list[str],
     ) -> list[list[float]]:
         return [
-            [float(i) * 1000.0 / max(seq_len, 1) for i in range(len(p))]
+            [float(i) * 1000.0 / max(seq_len, 1) for i in range(seq_len)]
             for p in predictions
         ]

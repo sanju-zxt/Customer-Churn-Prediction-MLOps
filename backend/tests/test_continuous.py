@@ -128,10 +128,11 @@ class TestTransformerCTCModel:
 
     def test_ctc_loss(self, model_config):
         model = TransformerCTCModel(model_config)
-        logits = torch.randn(16, 2, model_config.vocab_size)
+        # CTC expects (seq_len, batch, vocab_size)
+        logits = torch.randn(32, 2, model_config.vocab_size)
         targets = torch.tensor([[1, 2, 3], [4, 5, 0]])
         target_lengths = torch.tensor([3, 2])
-        input_lengths = torch.tensor([16, 16])
+        input_lengths = torch.tensor([32, 32])
         loss = model.compute_loss(logits, targets, target_lengths, input_lengths)
         assert loss.item() > 0
         assert loss.requires_grad
@@ -158,13 +159,13 @@ class TestContinuousAdapter:
         assert config.input_dim == model_config.input_dim
         assert config.num_layers == model_config.num_layers
 
-    def test_load_nonexistent_checkpoint(self, adapter, tmp_path):
-        checkpoint_path = str(tmp_path / "nonexistent.pt")
-        adapter.load(checkpoint_path)
+    def test_load_nonexistent_checkpoint(self, adapter):
+        adapter.load("nonexistent_path.pt")
         assert adapter.model is not None
         assert adapter._initialized is True
 
-    def test_load_with_checkpoint(self, adapter, tmp_path, model_config):
+    def test_load_with_checkpoint(self, adapter, model_config):
+        import tempfile
         model = TransformerCTCModel(model_config)
         checkpoint = {
             "model_state_dict": model.state_dict(),
@@ -183,9 +184,9 @@ class TestContinuousAdapter:
                 "blank_id": model_config.blank_id,
             },
         }
-        checkpoint_path = tmp_path / "model.pt"
-        torch.save(checkpoint, str(checkpoint_path))
-        adapter.load(str(checkpoint_path))
+        with tempfile.NamedTemporaryFile(suffix=".pt", delete=False) as f:
+            torch.save(checkpoint, f.name)
+            adapter.load(f.name)
         assert adapter.model is not None
 
     def test_to_device(self, adapter):
@@ -340,7 +341,8 @@ class TestStreamingInference:
 
 
 class TestModelPersistence:
-    def test_save_and_load(self, adapter, model_config, tmp_path):
+    def test_save_and_load(self, adapter, model_config):
+        import tempfile
         model = TransformerCTCModel(model_config)
         checkpoint = {
             "model_state_dict": model.state_dict(),
@@ -359,10 +361,9 @@ class TestModelPersistence:
                 "blank_id": model_config.blank_id,
             },
         }
-        checkpoint_path = tmp_path / "model.pt"
-        torch.save(checkpoint, str(checkpoint_path))
-
-        new_adapter = ContinuousAdapter(config=model_config)
-        new_adapter.load(str(checkpoint_path))
-        assert new_adapter.model is not None
-        assert new_adapter._initialized
+        with tempfile.NamedTemporaryFile(suffix=".pt", delete=False) as f:
+            torch.save(checkpoint, f.name)
+            new_adapter = ContinuousAdapter(config=model_config)
+            new_adapter.load(f.name)
+            assert new_adapter.model is not None
+            assert new_adapter._initialized
