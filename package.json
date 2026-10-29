@@ -1,0 +1,18 @@
+{
+  "name": "signbridge-avatar-pipeline",
+  "version": "1.0.0",
+  "description": "3D Signing Avatar pipeline with Blender → GLTF → Three.js runtime",
+  "dependencies": {
+    "@react-three/drei": "^10.7.9",
+    "@react-three/fiber": "^9.8.2",
+    "msgpackr": "^2.1.3",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "three": "^0.160.0",
+    "zustand": "^5.0.16"
+  },
+  "devDependencies": {
+    "@types/three": "^0.160.0",
+    "typescript": "^5.2.0"
+  }
+}
