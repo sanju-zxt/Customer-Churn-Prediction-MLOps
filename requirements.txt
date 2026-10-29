@@ -8,3 +8,7 @@ dvc==3.56.0
 fastapi==0.115.4
 uvicorn==0.32.0
 httpx==0.28.1
+msgpack==1.0.7
+onnxruntime==1.19.2
+onnx==1.16.1
+websockets==12.0
