@@ -1,4 +1,3 @@
-
 # Python virtual environments
 .venv/
 .penv/
@@ -25,7 +24,9 @@ mlflow.db-shm
 mlflow.db-wal
 
 # Generated model artifacts
-artifacts/
+artifacts/*
+!artifacts/model.joblib
+!artifacts/metrics.json
 
 # Node.js
 node_modules/
@@ -36,3 +37,11 @@ yarn-error.log*
 .env.development.local
 .env.test.local
 .env.production.local
+
+# Blender
+blender/*.blend1
+blender/*.blend2
+
+# IDE
+.vscode/
+.idea/

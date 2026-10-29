@@ -21,10 +21,8 @@ jobs:
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
-          python -m pip install "dvc[s3]==3.67.1" "pathspec>=0.10.3,<1.0"
-          python -m pip check
+          python -m pip install "dvc[s3]"
 
       - name: Configure DagsHub credentials
         env:
@@ -36,15 +34,14 @@ jobs:
           dvc remote modify origin --local access_key_id "$DAGSHUB_TOKEN"
           dvc remote modify origin --local secret_access_key "$DAGSHUB_TOKEN"
 
-      - name: Pull data and cached artifacts from DagsHub
+      - name: Pull dataset from DagsHub
         run: dvc pull -r origin
 
-      - name: Reproduce DVC pipeline
-        run: dvc repro
+      - name: Validate data
+        run: python validation.py
 
-      - name: Display model metrics
-        run: |
-          python -c "import json; print(json.dumps(json.load(open('artifacts/metrics.json')), indent=2))"
+      - name: Train model and enforce quality gate
+        run: python train.py --check-quality-gate
 
       - name: Run automated tests
         run: python -m pytest -v
