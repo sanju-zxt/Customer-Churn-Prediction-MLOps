@@ -1,0 +1,24 @@
+name: default
+seed: 42
+random_state: 42
+max_epochs: 10
+test_size: 0.20
+quality_gate:
+  minimum_auc: 0.60
+  minimum_wer: 0.10
+checkpointing:
+  enabled: true
+  save_best_only: true
+  monitor_metric: val_wer
+  mode: min
+  ema:
+    enabled: true
+    decay: 0.999
+    use_ema_for_eval: true
+  onnx:
+    enabled: true
+    export_best: true
+    opset_version: 17
+  model_path: ${oc.env:PROJECT_ROOT,.}/artifacts/model.joblib
+  metrics_path: ${oc.env:PROJECT_ROOT,.}/artifacts/metrics.json
+  checkpoint_dir: ${oc.env:PROJECT_ROOT,.}/checkpoints

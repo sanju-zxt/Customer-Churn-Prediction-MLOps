@@ -1,0 +1,5 @@
+defaults:
+  - customer_churn
+  - webdataset
+
+target: mixed

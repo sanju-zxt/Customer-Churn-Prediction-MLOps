@@ -1,0 +1,9 @@
+name: default
+mlflow:
+  tracking_uri: ${oc.env:PROJECT_ROOT,.}/mlruns
+  experiment_name: customer-churn-prediction
+  run_name: ${model.name}_${data.name}
+  log_params: true
+  log_metrics: true
+  log_artifacts: true
+  log_model: true

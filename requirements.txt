@@ -13,6 +13,12 @@ piper-tts==1.8.0
 onnxruntime==1.19.2
 onnx==1.16.1
 websockets==12.0
+hydra-core==1.3.2
+omegaconf==2.3.0
+torch>=2.0.0
+torchvision>=0.15.0
+webdataset==1.2.0
+optuna==4.0.0
 
 # Optional: for local STT privacy mode (requires C++ compiler to build)
 whisper-cpp-python==0.1.8

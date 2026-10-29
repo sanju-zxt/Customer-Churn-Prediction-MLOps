@@ -1,0 +1,21 @@
+name: curriculum
+synthetic_data:
+  enabled: true
+  num_samples: 10000
+  noise_level: 0.1
+  start_ratio: 1.0
+  end_ratio: 0.0
+  schedule: linear
+real_data:
+  weight: 0.5
+  warmup_epochs: 5
+dataset_hash:
+  enabled: true
+  include_config: true
+  include_metrics: true
+  hash_algorithm: sha256
+model_registry:
+  registry_uri: ${oc.env:PROJECT_ROOT,.}/models
+  auto_log: true
+  save_model: true
+  version: 1

@@ -1,0 +1,15 @@
+name: distributed
+backend: nccl
+use_ddp: true
+use_fsdp: true
+fsdp:
+  cpu_offload: false
+  mixed_precision: bf16
+  wrap_policy: transformer_layer
+  sharding: full
+ddp:
+  find_unused_parameters: false
+  bucket_cap_mb: 25
+  gradient_as_bucket_view: true
+num_gpus: 1
+gradient_accumulation_steps: 1

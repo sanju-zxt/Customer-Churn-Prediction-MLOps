@@ -1,0 +1,13 @@
+name: pytorch_model
+type: pytorch
+arch: transformer
+d_model: 256
+nhead: 8
+num_layers: 6
+dim_feedforward: 1024
+dropout: 0.1
+vocab_size: 1000
+num_classes: 2
+learning_rate: 0.0001
+weight_decay: 0.01
+max_seq_len: 512

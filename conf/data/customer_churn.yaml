@@ -1,0 +1,19 @@
+name: customer_churn
+source: local_csv
+path: ${oc.env:PROJECT_ROOT,.}/data/customers.csv
+format: csv
+validation:
+  required_columns:
+    - tenure
+    - monthly_charges
+    - support_calls
+    - contract
+    - internet_service
+    - churn
+preprocessing:
+  numeric_imputer: median
+  categorical_imputer:
+    strategy: constant
+    fill_value: Missing
+  scaler: standard
+  encoder: onehot

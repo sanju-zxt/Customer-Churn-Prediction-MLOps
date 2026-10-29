@@ -1,0 +1,5 @@
+defaults:
+  - logistic_regression
+  - pytorch_model
+
+target: mixed
