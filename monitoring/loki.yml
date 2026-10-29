@@ -1,0 +1,84 @@
+# =============================================================================
+# Loki Configuration for Structured JSON Log Aggregation
+# =============================================================================
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+  grpc_listen_port: 9096
+  log_level: info
+  chunk_target_size: 1024000
+
+common:
+  path_prefix: /loki
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+        http:
+
+ingester:
+  lifecloSEC: true
+  address: localhost
+  ring:
+    kvstore:
+      store: inmemory
+    replication_factor: 1
+  chunk_idle_period: 5m
+  chunk_retain_period: 1h
+  max_chunk_age: 1h
+  chunk_target_size: 1024000
+
+schema_config:
+  configs:
+    - from: 2024-01-01
+      store: boltdb-shipper
+      object_store: filesystem
+      schema: v12
+      index:
+        prefix: loki_
+        period: 24h
+
+storage_config:
+  boltdb_shipper:
+    active_index_update_period: 10s
+    cache_location: /loki/boltdb-cache
+  filesystem:
+    directory: /loki/chunks
+
+compactor:
+  working_directory: /loki/compactor
+  retention_delete: true
+  retention_period: 168h
+
+limits_config:
+  enforce_metric_name: false
+  reject_old_samples: true
+  reject_old_samples_max_age: 168h
+  max_entries_look_back: 30
+
+frontend:
+  max_discrepancy_ms: 0
+  max_relevant_entries: 64h
+
+frontend_v2:
+  auth:
+    oidc_config:
+      enabled: false
+
+ruler:
+  alertmanager_url: http://localhost
+  enable_api: true
+  enable_query: true
+  enable_rule_continuation: true
+  retention: 336h

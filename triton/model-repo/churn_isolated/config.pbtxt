@@ -1,0 +1,91 @@
+# =============================================================================
+# Triton Model Config - churn_isolated (isolated model for canary/batch jobs)
+# =============================================================================
+# - Dedicated GPU instance, no sharing
+# - No dynamic batching for predictable latency
+# - CPU fallback available
+# -----------------------------------------------------------------------------
+name: "churn_isolated"
+platform: "onnxruntime_onnx"
+max_batch_size: 32
+
+input [
+  {
+    name: "tenure_input"
+    data_type: TYPE_INT32
+    dims: [1]
+    reshape { shape: [1] }
+  },
+  {
+    name: "monthly_charges_input"
+    data_type: TYPE_FP32
+    dims: [1]
+    reshape { shape: [1] }
+  },
+  {
+    name: "support_calls_input"
+    data_type: TYPE_INT32
+    dims: [1]
+    reshape { shape: [1] }
+  },
+  {
+    name: "contract_input"
+    data_type: TYPE_FP32
+    dims: [1]
+    reshape { shape: [1] }
+  },
+  {
+    name: "internet_service_input"
+    data_type: TYPE_FP32
+    dims: [1]
+    reshape { shape: [1] }
+  }
+]
+
+output [
+  {
+    name: "churn_prediction"
+    data_type: TYPE_INT64
+    dims: [1]
+  },
+  {
+    name: "churn_probability"
+    data_type: TYPE_FP32
+    dims: [1]
+  }
+]
+
+instance_group [
+  {
+    kind: KIND_GPU
+    count: 1
+    gpus: [0]
+  },
+  {
+    kind: KIND_CPU
+    count: 1
+  }
+]
+
+# No dynamic batching - isolated model for batch/critical inference
+dynamic_batching {
+  preferred_batch_size: [1, 4, 8]
+  max_queue_delay_microseconds: 0
+}
+
+optimization {
+  execution_acceleration [
+    {
+      name: "tensorrt"
+      parameters {
+        key: "precision_mode"
+        value: {
+          type: STRING
+          string_value: "FP32"
+        }
+      }
+    }
+  ]
+}
+
+version_policy: { latest: 1 }

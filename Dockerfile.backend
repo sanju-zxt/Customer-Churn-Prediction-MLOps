@@ -1,0 +1,79 @@
+# =============================================================================
+# Dockerfile.backend - Multi-stage build for FastAPI backend (CUDA 12.8, PyTorch 2.5, ONNX Runtime GPU, Piper TTS)
+# =============================================================================
+
+# ---- Builder Stage ----
+FROM nvidia/cuda:12.8.1-cudnn-devel-ubuntu22.04 AS builder
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.11 \
+    python3.11-venv \
+    python3.11-dev \
+    build-essential \
+    git \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+RUN python3.11 -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Install PyTorch 2.5.1+cu128, ONNX Runtime GPU, and Piper TTS
+COPY requirements.txt .
+
+RUN pip install --upgrade pip && \
+    pip install \
+      --index-url https://download.pytorch.org/whl/cu128 \
+      torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 --no-cache-dir && \
+    pip install onnxruntime-gpu==1.18.1 && \
+    pip install piper-tts --no-cache-dir
+
+RUN pip install -r requirements.txt
+
+COPY . .
+
+# ---- Runtime Stage ----
+FROM nvidia/cuda:12.8.1-cudnn-runtime-ubuntu22.04 AS runtime
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PATH="/opt/venv/bin:$PATH" \
+    MODEL_PATH=/app/artifacts/model.joblib \
+    PORT=8000 \
+    OMP_NUM_THREADS=4
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.11 \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender-dev \
+    libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /opt/venv /opt/venv
+COPY --from=builder /app /app
+
+WORKDIR /app
+
+RUN useradd --no-create-home --uid 1000 appuser && \
+    chown -R appuser:appuser /app
+USER appuser
+
+EXPOSE 8000
+
+# Install gunicorn for production, but keep uvicorn for healthcheck
+RUN pip install gunicorn==23.0.0
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD python -c "import httpx; r=httpx.get('http://localhost:8000/health', timeout=3); r.raise_for_status(); assert r.json()['status']=='healthy'"
+
+CMD ["gunicorn", "--worker-class", "uvicorn.workers.UvicornWorker", "--workers", "4", "--bind", "0.0.0.0:8000", "--timeout", "60", "--keep-alive", "5", "app:app"]

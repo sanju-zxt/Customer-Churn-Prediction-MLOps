@@ -1,0 +1,132 @@
+# =============================================================================
+# Prometheus Alert Rules for Churn Prediction API
+# =============================================================================
+groups:
+  - name: churn-alerts
+    rules:
+      # High Latency
+      - alert: HighAPILatency
+        expr: histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[5m])) by (le)) > 1
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High API latency detected"
+          description: "99th percentile latency is above 1 second for more than 2 minutes"
+
+      - alert: HighAPILatencyWarning
+        expr: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le)) > 0.5
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Moderate API latency warning"
+          description: "95th percentile latency is above 500ms"
+
+      # High Error Rate
+      - alert: HighErrorRate
+        expr: sum(rate(http_requests_total{status=~"5.."}[5m])) / sum(rate(http_requests_total[5m])) * 100 > 5
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is above 5% for more than 1 minute"
+
+      - alert: HighErrorRateWarning
+        expr: sum(rate(http_requests_total{status=~"5.."}[5m])) / sum(rate(http_requests_total[5m])) * 100 > 2
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Moderate error rate warning"
+          description: "Error rate is above 2% for more than 2 minutes"
+
+      # GPU Utilization
+      - alert: HighGPUUtilization
+        expr: avg(nvidia_gpu_duty_cycle) by (instance) > 85
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High GPU utilization"
+          description: "GPU utilization is above 85% on {{ $labels.instance }}"
+
+      - alert: NoGPUUtilization
+        expr: avg(nvidia_gpu_duty_cycle) by (instance) == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "GPU not utilized"
+          description: "GPU utilization is 0% on {{ $labels.instance }} for more than 5 minutes"
+
+      # High GPU Memory
+      - alert: HighGPUMemory
+        expr: nvidia_gpu_memory_used_bytes / nvidia_gpu_memory_total_bytes * 100 > 90
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High GPU memory usage"
+          description: "GPU memory usage is above 90% on {{ $labels.instance }}"
+
+      # Queue depth alerts for Triton
+      - alert: HighTritonQueueDepth
+        expr: nv_gpu_utilization > 85
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Triton inference queue backing up"
+          description: "Triton inference queue depth is high, requests may be delayed"
+
+      # Pod Restart Alerts
+      - alert: PodRestarting
+        expr: changes(kube_pod_container_status_restarts_total{namespace="churn"}[5m]) > 2
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Pod restarting frequently"
+          description: "Pod {{ $labels.pod }} has restarted more than 2 times in the last 5 minutes"
+
+      # Deployment Replica Alerts
+      - alert: DeploymentUnavailable
+        expr: kube_deployment_status_replicas_available{namespace="churn"} < kube_deployment_status_replicas{namespace="churn"}
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Deployment not fully available"
+          description: "Deployment {{ $labels.deployment }} has unavailable replicas"
+
+      # Database Alerts
+      - alert: PostgreSQLHighConnections
+        expr: pg_stat_activity_count{state="active"} > 80
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PostgreSQL high active connections"
+          description: "PostgreSQL has {{ $value }} active connections"
+
+      # Redis Alerts
+      - alert: RedisHighMemory
+        expr: redis_memory_used_bytes / redis_memory_max_bytes * 100 > 85
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis memory usage high"
+          description: "Redis memory usage is above 85%"
+
+      # Disk Space Alerts
+      - alert: LowDiskSpace
+        expr: (node_filesystem_avail_bytes * 100) / node_filesystem_size_bytes < 10
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Low disk space"
+          description: "Disk space on {{ $labels.instance }} is below 10%"

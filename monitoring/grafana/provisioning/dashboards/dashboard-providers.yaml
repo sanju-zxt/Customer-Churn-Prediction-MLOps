@@ -1,0 +1,17 @@
+# =============================================================================
+# Grafana Dashboard Provisioning
+# =============================================================================
+apiVersion: 1
+
+providers:
+  - name: "Churn Monitoring Dashboards"
+    orgId: 1
+    folder: "Churn ML"
+    folderUid: "churn-monitoring"
+    type: file
+    disableDeletion: false
+    editable: true
+    updateIntervalSeconds: 10
+    options:
+      path: /etc/grafana/provisioning/dashboards
+      allowUiUpdates: true

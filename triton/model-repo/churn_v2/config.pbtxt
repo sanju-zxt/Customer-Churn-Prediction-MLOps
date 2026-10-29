@@ -1,0 +1,79 @@
+# =============================================================================
+# Triton Model Config - churn_v2 (newer model version for A/B testing)
+# =============================================================================
+# - Single GPU instance for comparison testing
+# - Uses ONNX Runtime for compatibility testing
+# - Dynamic batching with lower capacity for controlled testing
+# -----------------------------------------------------------------------------
+name: "churn_v2"
+platform: "onnxruntime_onnx"
+max_batch_size: 64
+
+input [
+  {
+    name: "tenure_input"
+    data_type: TYPE_FP32
+    dims: [1]
+    reshape { shape: [1] }
+  },
+  {
+    name: "monthly_charges_input"
+    data_type: TYPE_FP32
+    dims: [1]
+    reshape { shape: [1] }
+  },
+  {
+    name: "support_calls_input"
+    data_type: TYPE_FP32
+    dims: [1]
+    reshape { shape: [1] }
+  },
+  {
+    name: "contract_input"
+    data_type: TYPE_FP32
+    dims: [1]
+    reshape { shape: [1] }
+  },
+  {
+    name: "internet_service_input"
+    data_type: TYPE_FP32
+    dims: [1]
+    reshape { shape: [1] }
+  }
+]
+
+output [
+  {
+    name: "churn_prediction"
+    data_type: TYPE_INT64
+    dims: [1]
+  },
+  {
+    name: "churn_probability"
+    data_type: TYPE_FP32
+    dims: [1]
+  }
+]
+
+instance_group [
+  {
+    kind: KIND_GPU
+    count: 1
+    gpus: [0]
+  }
+]
+
+dynamic_batching {
+  preferred_batch_size: [1, 4, 8, 16, 32, 64]
+  max_queue_delay_microseconds: 20000
+}
+
+optimization {
+  execution_acceleration [
+    {
+      name: "onnxruntime"
+    }
+  ]
+}
+
+version_policy: { latest: 1 }

@@ -1,0 +1,172 @@
+# =============================================================================
+# Dockerfile.frontend - Multi-stage build (Node.js static build + nginx runtime)
+# =============================================================================
+
+# ---- Builder Stage ----
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+# Create package.json for the frontend app
+RUN echo '{"name":"churn-frontend","version":"1.0.0","private":true,"scripts":{"build":"node build.js"}}' > package.json
+
+# Install dependencies if needed
+RUN --mount=type=cache,target=/app/node_modules \
+    npm install 2>/dev/null || true
+
+# Create a minimal React-style frontend using vanilla JS (no framework needed)
+RUN mkdir -p src public
+
+# Build the static frontend
+RUN cat > build.js << 'BUILDSCRIPT'
+const fs = require('fs');
+const path = require('path');
+
+const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Customer Churn Prediction</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; min-height: 100vh; padding: 20px; }
+    .container { max-width: 600px; margin: 0 auto; background: white; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); padding: 30px; }
+    h1 { color: #1a1a2e; margin-bottom: 10px; }
+    .subtitle { color: #666; margin-bottom: 30px; }
+    .form-group { margin-bottom: 20px; }
+    label { display: block; margin-bottom: 8px; font-weight: 500; color: #333; }
+    input, select { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; }
+    input:focus, select:focus { outline: none; border-color: #4f46e5; box-shadow: 0 0 0 3px rgba(79,70,229,0.1); }
+    button { width: 100%; padding: 14px; background: #4f46e5; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer; }
+    button:hover { background: #4338ca; }
+    button:disabled { background: #9ca3af; cursor: not-allowed; }
+    .result { margin-top: 20px; padding: 20px; border-radius: 8px; display: none; }
+    .result.churn { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
+    .result.no-churn { background: #f0fdf4; border: 1px solid #bbf7d0; color: #166534; }
+    .result h3 { margin-bottom: 10px; }
+    .probability { font-size: 18px; font-weight: 600; }
+    .error { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; padding: 15px; border-radius: 8px; margin-top: 20px; display: none; }
+    .loading { display: none; text-align: center; color: #666; }
+    .spinner { border: 3px solid #f3f3f3; border-top: 3px solid #4f46e5; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; margin: 0 auto 10px; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Customer Churn Prediction</h1>
+    <p class="subtitle">Enter customer details to predict churn probability</p>
+    <form id="churnForm">
+      <div class="form-group">
+        <label for="tenure">Tenure (months)</label>
+        <input type="number" id="tenure" name="tenure" min="0" required placeholder="e.g., 12">
+      </div>
+      <div class="form-group">
+        <label for="monthly_charges">Monthly Charges ($)</label>
+        <input type="number" id="monthly_charges" name="monthly_charges" min="0" step="0.01" required placeholder="e.g., 70.50">
+      </div>
+      <div class="form-group">
+        <label for="support_calls">Support Calls</label>
+        <input type="number" id="support_calls" name="support_calls" min="0" required placeholder="e.g., 2">
+      </div>
+      <div class="form-group">
+        <label for="contract">Contract Type</label>
+        <select id="contract" name="contract" required>
+          <option value="">Select contract</option>
+          <option value="Month-to-month">Month-to-month</option>
+          <option value="One year">One year</option>
+          <option value="Two year">Two year</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="internet_service">Internet Service</label>
+        <select id="internet_service" name="internet_service">
+          <option value="">Select internet service</option>
+          <option value="DSL">DSL</option>
+          <option value="Fiber optic">Fiber optic</option>
+          <option value="No">No</option>
+        </select>
+      </div>
+      <button type="submit" id="predictBtn">Predict Churn</button>
+      <div class="loading" id="loading">
+        <div class="spinner"></div>
+        <p>Predicting...</p>
+      </div>
+    </form>
+    <div class="result" id="result"></div>
+    <div class="error" id="error"></div>
+  </div>
+  <script>
+    const API_URL = '/api';
+    document.getElementById('churnForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('predictBtn');
+      const loading = document.getElementById('loading');
+      const result = document.getElementById('result');
+      const error = document.getElementById('error');
+      btn.disabled = true;
+      loading.style.display = 'block';
+      result.style.display = 'none';
+      error.style.display = 'none';
+      const formData = new FormData(e.target);
+      const data = {
+        tenure: parseInt(formData.get('tenure')),
+        monthly_charges: parseFloat(formData.get('monthly_charges')),
+        support_calls: parseInt(formData.get('support_calls')),
+        contract: formData.get('contract'),
+        internet_service: formData.get('internet_service') || null
+      };
+      try {
+        const response = await fetch(\`\${API_URL}/predict\`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        if (!response.ok) {
+          const err = await response.json();
+          throw new Error(err.detail || 'Prediction failed');
+        }
+        const prediction = await response.json();
+        result.className = 'result ' + (prediction.churn_prediction === 1 ? 'churn' : 'no-churn');
+        result.innerHTML = \`<h3>\${prediction.churn_label}</h3><div class="probability">Churn Probability: \${(prediction.churn_probability * 100).toFixed(2)}%</div>\`;
+        result.style.display = 'block';
+      } catch (err) {
+        error.textContent = err.message;
+        error.style.display = 'block';
+      } finally {
+        btn.disabled = false;
+        loading.style.display = 'none';
+      }
+    });
+  </script>
+</body>
+</html>`;
+
+fs.mkdirSync(path.join(__dirname, 'dist'), { recursive: true });
+fs.writeFileSync(path.join(__dirname, 'dist', 'index.html'), html);
+console.log('Build complete');
+BUILDSCRIPT
+
+RUN npm run build
+
+# ---- Runtime Stage ----
+FROM nginx:alpine AS runtime
+
+# Copy custom nginx config
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+# Copy built static files
+COPY --from=builder /app/dist /usr/share/nginx/html
+
+# Create a non-root user
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup && \
+    chown -R appuser:appgroup /usr/share/nginx/html /var/cache/nginx /var/log/nginx /etc/nginx/conf.d/default.conf
+
+USER appuser
+
+EXPOSE 80
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:80/ || exit 1
+
+CMD ["nginx", "-g", "daemon off;"]

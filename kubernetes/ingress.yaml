@@ -1,0 +1,106 @@
+# =============================================================================
+# Kubernetes Ingress with TLS, rate limiting, and CORS
+# =============================================================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: churn-ingress
+  namespace: churn
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/rewrite-target: /$1
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "10"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-burst: "20"
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "Content-Type, Authorization"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "X-Content-Type-Options: nosniff";
+      more_set_headers "X-Frame-Options: DENY";
+      more_set_headers "X-XSS-Protection: 1; mode=block";
+      more_set_headers "Referrer-Policy: strict-origin-when-cross-origin";
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - api.churn.example.com
+      secretName: churn-tls-secret
+  rules:
+    - host: api.churn.example.com
+      http:
+        paths:
+          - path: /api/(.*)
+            pathType: Prefix
+            backend:
+              service:
+                name: churn-backend-svc
+                port:
+                  number: 8000
+          - path: /triton/(.*)
+            pathType: Prefix
+            backend:
+              service:
+                name: churn-triton-svc
+                port:
+                  number: 8000
+          - path: /mlflow/(.*)
+            pathType: Prefix
+            backend:
+              service:
+                name: mlflow.churn.svc.cluster.local
+                port:
+                  number: 5000
+          - path: /(.*)
+            pathType: Prefix
+            backend:
+              service:
+                name: churn-frontend-svc
+                port:
+                  number: 80
+---
+# =============================================================================
+# Kubernetes Ingress for Triton Standalone (optional direct access)
+# =============================================================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: churn-triton-ingress
+  namespace: churn
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "30"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "120"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "X-Content-Type-Options: nosniff";
+      more_set_headers "X-Frame-Options: DENY";
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - triton.churn.example.com
+      secretName: churn-triton-tls-secret
+  rules:
+    - host: triton.churn.example.com
+      http:
+        paths:
+          - path: /v2/(.*)
+            pathType: Prefix
+            backend:
+              service:
+                name: churn-triton-standalone-svc
+                port:
+                  number: 8000
+          - path: /(.*)
+            pathType: Prefix
+            backend:
+              service:
+                name: churn-triton-standalone-svc
+                port:
+                  number: 8002

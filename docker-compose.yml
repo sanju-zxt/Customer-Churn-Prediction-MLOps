@@ -1,0 +1,212 @@
+# =============================================================================
+# docker-compose.yml - Local dev stack (backend, frontend, redis, mlflow, postgres, prometheus, grafana, loki)
+# =============================================================================
+services:
+  # ---- Backend Service ----
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    image: churn-backend:dev
+    container_name: churn-backend
+    runtime: nvidia
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu]
+              count: 1
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/churn_db
+      - REDIS_URL=redis://redis:6379/0
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+      - MODEL_PATH=/app/artifacts/model.joblib
+      - LOG_LEVEL=info
+    volumes:
+      - ./artifacts:/app/artifacts
+      - ./logs:/app/logs
+    depends_on:
+      - postgres
+      - redis
+      - mlflow
+    restart: unless-stopped
+
+  # ---- Frontend Service ----
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    image: churn-frontend:dev
+    container_name: churn-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  # ---- Redis (Cache) ----
+  redis:
+    image: redis:7-alpine
+    container_name: churn-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes
+    restart: unless-stopped
+
+  # ---- PostgreSQL ----
+  postgres:
+    image: postgres:16-alpine
+    container_name: churn-postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: churn_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init.sql
+    restart: unless-stopped
+
+  # ---- MLflow ----
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:2.17.2
+    container_name: churn-mlflow
+    ports:
+      - "5000:5000"
+    environment:
+      - BACKEND_STORE_URI=sqlite:///mlflow/mlflow.db
+      - ARTIFACT_ROOT=/mlflow/artifacts
+      - MLFLOW_S3_ENDPOINT_URL=http://minio:9000
+    volumes:
+      - mlflow_data:/mlflow
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+  # ---- MinIO (S3-compatible object storage for MLflow artifacts) ----
+  minio:
+    image: minio/minio:latest
+    container_name: churn-minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin123
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    restart: unless-stopped
+
+  # ---- Prometheus ----
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: churn-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=7d'
+      - '--storage.tsdb.retention.size=1GB'
+      - '--log.level=info'
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  # ---- Grafana ----
+  grafana:
+    image: grafana/grafana-enterprise:11.2.2
+    container_name: churn-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ANONYMOUS_ENABLED=true
+      - GF_USERS_ANONYMOUS_ORG_ROLE=Admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+  # ---- Loki ----
+  loki:
+    image: grafana/loki:3.3.0
+    container_name: churn-loki
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./monitoring/loki.yml:/etc/loki/loki.yml:ro
+      - loki_data:/loki
+    command: -config.file=/etc/loki/loki.yml
+    restart: unless-stopped
+
+  # ---- Tempo (tracing) ----
+  tempo:
+    image: grafana/tempo:3.3.0
+    container_name: churn-tempo
+    ports:
+      - "3200:3200"
+    volumes:
+      - tempo_data:/tmp
+      - ./monitoring/tempo.yml:/etc/tempo.yaml:ro
+    command: -config.file=/etc/tempo.yaml
+    restart: unless-stopped
+
+  # ---- Triton Inference Server ----
+  triton:
+    image: nvcr.io/nvidia/tritonserver:24.10-py3
+    container_name: churn-triton
+    runtime: nvidia
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu]
+              count: 1
+    ports:
+      - "8000:8000"
+      - "8001:8001"
+      - "8002:8002"
+    volumes:
+      - ./triton/model-repo:/models
+    command: tritonserver --model-repository=/models
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  # ---- Promtail (log shipper) ----
+  promtail:
+    image: grafana/promtail:3.3.0
+    container_name: churn-promtail
+    volumes:
+      - ./monitoring/promtail.yml:/etc/promtail/promtail.yml:ro
+      - ./logs:/app/logs:ro
+    command: -config.file=/etc/promtail/promtail.yml
+    depends_on:
+      - loki
+    restart: unless-stopped
+
+volumes:
+  redis_data:
+  postgres_data:
+  mlflow_data:
+  minio_data:
+  prometheus_data:
+  grafana_data:
+  loki_data:
+  tempo_data:
