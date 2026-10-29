@@ -1,7 +1,7 @@
 
 from fastapi.testclient import TestClient
 
-from app import app
+from backend.app.main import app
 
 
 def test_health_endpoint():
@@ -18,7 +18,7 @@ def test_root_endpoint():
         response = client.get("/")
 
     assert response.status_code == 200
-    assert "Customer Churn Prediction API" in response.json()["message"]
+    assert "Unified ML Flow API" in response.json()["message"]
 
 
 def test_predict_endpoint():

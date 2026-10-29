@@ -13,9 +13,9 @@ import pandas as pd
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
-from app.api import api_router
-from backend.app.api.recognition import router as recognition_router
-from backend.app.api.tts import router as tts_router
+from .api import api_router
+from .api.recognition import router as recognition_router
+from .api.tts import router as tts_router
 
 PROJECT_DIR = Path(__file__).resolve().parents[2]
 MODEL_PATH = PROJECT_DIR / "artifacts" / "model.joblib"
