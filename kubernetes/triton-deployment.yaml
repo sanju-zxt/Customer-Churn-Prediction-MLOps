@@ -1,0 +1,135 @@
+# =============================================================================
+# Kubernetes Deployment for Triton Inference Server (Standalone)
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: churn-triton-standalone
+  namespace: churn
+  labels:
+    app: churn-triton-standalone
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8002"
+    prometheus.io/path: "/metrics"
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: churn-triton-standalone
+  template:
+    metadata:
+      labels:
+        app: churn-triton-standalone
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/accelerator
+                    operator: Exists
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - churn-triton-standalone
+                topologyKey: kubernetes.io/hostname
+      tolerations:
+        - key: "nvidia.com/gpu"
+          operator: "Equal"
+          value: "present"
+          effect: "NoSchedule"
+      containers:
+        - name: triton-server
+          image: nvcr.io/nvidia/tritonserver:24.10-py3
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+              name: http
+              protocol: TCP
+            - containerPort: 8001
+              name: grpc
+              protocol: TCP
+            - containerPort: 8002
+              name: metrics
+              protocol: TCP
+          args:
+            - tritonserver
+            - --model-repository=/models
+            - --model-control-mode=explicit
+            - --load-model=all
+            - --strict-model-config=false
+            - --log-verbose=1
+            - --grpc-port=8001
+            - --http-port=8000
+            - --metrics-port=8002
+          resources:
+            requests:
+              memory: "4Gi"
+              cpu: "2"
+              nvidia.com/gpu: 1
+            limits:
+              memory: "8Gi"
+              cpu: "4"
+              nvidia.com/gpu: 1
+          volumeMounts:
+            - name: model-repo
+              mountPath: /models
+          readinessProbe:
+            httpGet:
+              path: /v2/health/ready
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 12
+          livenessProbe:
+            httpGet:
+              path: /v2/health/live
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+      volumes:
+        - name: model-repo
+          persistentVolumeClaim:
+            claimName: triton-model-pvc
+---
+# =============================================================================
+# PVC for Triton Model Repository
+# =============================================================================
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: triton-model-pvc
+  namespace: churn
+spec:
+  accessModes:
+    - ReadMany
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: standard
+---
+# =============================================================================
+# Namespace
+# =============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: churn
+  labels:
+    name: churn
+    environment: production

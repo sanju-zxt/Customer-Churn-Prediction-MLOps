@@ -1,0 +1,215 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "Churn Prediction API - Overview",
+    "tags": ["churn", "ml", "api"],
+    "timezone": "browser",
+    "schemaVersion": 39,
+    "version": 1,
+    "refresh": "30s",
+    "panels": [
+      {
+        "id": 1,
+        "title": "API Request Rate",
+        "type": "graph",
+        "gridPos": { "x": 0, "y": 0, "w": 8, "h": 8 },
+        "targets": [
+          {
+            "expr": "sum(rate(http_requests_total[5m])) by (status)",
+            "legendFormat": "{{status}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [{ "format": "short", "label": "req/s" }, {}]
+      },
+      {
+        "id": 2,
+        "title": "Request Latency (99th percentile)",
+        "type": "graph",
+        "gridPos": { "x": 8, "y": 0, "w": 8, "h": 8 },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))",
+            "legendFormat": "P99 Latency",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [{ "format": "s", "label": "seconds" }, {}]
+      },
+      {
+        "id": 3,
+        "title": "Error Rate (%)",
+        "type": "stat",
+        "gridPos": { "x": 16, "y": 0, "w": 4, "h": 8 },
+        "targets": [
+          {
+            "expr": "sum(rate(http_requests_total{status=~\"5..\"}[5m])) / sum(rate(http_requests_total[5m])) * 100",
+            "legendFormat": "Error Rate",
+            "refId": "A"
+          }
+        ],
+        "thresholds": [
+          { "value": 2, "color": "warning" },
+          { "value": 5, "color": "critical" }
+        ],
+        "yaxes": [{ "format": "percent", "label": "%" }, {}]
+      },
+      {
+        "id": 4,
+        "title": "GPU Utilization",
+        "type": "gauge",
+        "gridPos": { "x": 0, "y": 8, "w": 8, "h": 8 },
+        "targets": [
+          {
+            "expr": "avg(nvidia_gpu_duty_cycle)",
+            "legendFormat": "GPU Avg",
+            "refId": "A"
+          }
+        ],
+        "thresholds": [
+          { "value": 70, "color": "ok" },
+          { "value": 80, "color": "warning" },
+          { "value": 85, "color": "critical" }
+        ]
+      },
+      {
+        "id": 5,
+        "title": "GPU Memory Usage",
+        "type": "graph",
+        "gridPos": { "x": 8, "y": 8, "w": 8, "h": 8 },
+        "targets": [
+          {
+            "expr": "nvidia_gpu_memory_used_bytes / nvidia_gpu_memory_total_bytes * 100",
+            "legendFormat": "GPU Memory Used",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [{ "format": "percent", "label": "%" }, {}]
+      },
+      {
+        "id": 6,
+        "title": "Triton Queue Depth",
+        "type": "graph",
+        "gridPos": { "x": 16, "y": 8, "w": 4, "h": 8 },
+        "targets": [
+          {
+            "expr": "nv_gpu_utilization",
+            "legendFormat": "Queue Depth",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [{ "format": "short", "label": "requests" }, {}]
+      },
+      {
+        "id": 7,
+        "title": "Inference Latency (ms)",
+        "type": "graph",
+        "gridPos": { "x": 0, "y": 16, "w": 12, "h": 8 },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.5, sum(rate(triton_server_inference_request_success_duration_seconds_bucket[5m])) by (le)) * 1000",
+            "legendFormat": "P50 Latency",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.95, sum(rate(triton_server_inference_request_success_duration_seconds_bucket[5m])) by (le)) * 1000",
+            "legendFormat": "P95 Latency",
+            "refId": "B"
+          },
+          {
+            "expr": "histogram_quantile(0.99, sum(rate(triton_server_inference_request_success_duration_seconds_bucket[5m])) by (le)) * 1000",
+            "legendFormat": "P99 Latency",
+            "refId": "C"
+          }
+        ],
+        "yaxes": [{ "format": "ms", "label": "milliseconds" }, {}]
+      },
+      {
+        "id": 8,
+        "title": "Active Inference Requests",
+        "type": "stat",
+        "gridPos": { "x": 12, "y": 16, "w": 4, "h": 8 },
+        "targets": [
+          {
+            "expr": "sum(triton_server_inference_request_success_duration_seconds_count)",
+            "legendFormat": "Total Requests",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 9,
+        "title": "PostgreSQL Connections",
+        "type": "graph",
+        "gridPos": { "x": 16, "y": 16, "w": 4, "h": 8 },
+        "targets": [
+          {
+            "expr": "pg_stat_activity_count",
+            "legendFormat": "Active Connections",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [{ "format": "short", "label": "connections" }, {}]
+      },
+      {
+        "id": 10,
+        "title": "Redis Memory Usage",
+        "type": "gauge",
+        "gridPos": { "x": 0, "y": 24, "w": 8, "h": 8 },
+        "targets": [
+          {
+            "expr": "redis_memory_used_bytes / redis_memory_max_bytes * 100",
+            "legendFormat": "Redis Memory %",
+            "refId": "A"
+          }
+        ],
+        "thresholds": [
+          { "value": 75, "color": "ok" },
+          { "value": 85, "color": "warning" },
+          { "value": 90, "color": "critical" }
+        ]
+      },
+      {
+        "id": 11,
+        "title": "Pod Restarts (24h)",
+        "type": "stat",
+        "gridPos": { "x": 8, "y": 24, "w": 4, "h": 8 },
+        "targets": [
+          {
+            "expr": "sum(increase(kube_pod_container_status_restarts_total[24h])) by (pod)",
+            "legendFormat": "{{pod}}",
+            "refId": "A"
+          }
+        ]
+      },
+      {
+        "id": 12,
+        "title": "Request Logs",
+        "type": "logs",
+        "gridPos": { "x": 0, "y": 32, "w": 20, "h": 16 },
+        "targets": [
+          {
+            "expr": "{job=\"backend\"} |~ \"request\"",
+            "refId": "A"
+          }
+        ],
+        "maxLines": 100,
+        "showTime": true
+      }
+    ],
+    "templating": {
+      "list": [
+        {
+          "name": "instance",
+          "type": "query",
+          "query": "label_values(up, instance)",
+          "refresh": 1,
+          "includeAll": true,
+          "multi": false
+        }
+      ]
+    }
+  },
+  "folderId": 1,
+  "overwrite": false
+}

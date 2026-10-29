@@ -1,0 +1,152 @@
+# =============================================================================
+# Kubernetes Service for Backend API
+# =============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: churn-backend-svc
+  namespace: churn
+  labels:
+    app: churn-backend
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9090"
+    prometheus.io/path: "/metrics"
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8000
+      targetPort: 8000
+      protocol: TCP
+      name: http
+    # Metrics port for Prometheus
+    - port: 9464
+      targetPort: 9464
+      protocol: TCP
+      name: metrics
+  selector:
+    app: churn-backend
+---
+# =============================================================================
+# Kubernetes Service for Frontend
+# =============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: churn-frontend-svc
+  namespace: churn
+  labels:
+    app: churn-frontend
+spec:
+  type: ClusterIP
+  ports:
+    - port: 80
+      targetPort: 80
+      protocol: TCP
+      name: http
+  selector:
+    app: churn-frontend
+---
+# =============================================================================
+# Kubernetes Service for Triton Inference Server
+# =============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: churn-triton-svc
+  namespace: churn
+  labels:
+    app: churn-triton
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8002"
+    prometheus.io/path: "/metrics"
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8000
+      targetPort: 8000
+      protocol: TCP
+      name: http
+    - port: 8001
+      targetPort: 8001
+      protocol: TCP
+      name: grpc
+    - port: 8002
+      targetPort: 8002
+      protocol: TCP
+      name: metrics
+  selector:
+    app: churn-triton
+---
+# =============================================================================
+# Kubernetes Service for PostgreSQL
+# =============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: churn-postgres-svc
+  namespace: churn
+  labels:
+    app: churn-postgres
+spec:
+  type: ClusterIP
+  ports:
+    - port: 5432
+      targetPort: 5432
+      protocol: TCP
+      name: postgres
+  selector:
+    app: churn-postgres
+---
+# =============================================================================
+# Kubernetes Service for Redis
+# =============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: churn-redis-svc
+  namespace: churn
+  labels:
+    app: churn-redis
+spec:
+  type: ClusterIP
+  ports:
+    - port: 6379
+      targetPort: 6379
+      protocol: TCP
+      name: redis
+  selector:
+    app: churn-redis
+---
+# =============================================================================
+# Kubernetes Service for Triton Standalone
+# =============================================================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: churn-triton-standalone-svc
+  namespace: churn
+  labels:
+    app: churn-triton-standalone
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8002"
+    prometheus.io/path: "/metrics"
+spec:
+  type: LoadBalancer
+  ports:
+    - port: 8000
+      targetPort: 8000
+      protocol: TCP
+      name: http
+    - port: 8001
+      targetPort: 8001
+      protocol: TCP
+      name: grpc
+    - port: 8002
+      targetPort: 8002
+      protocol: TCP
+      name: metrics
+  selector:
+    app: churn-triton-standalone

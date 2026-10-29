@@ -1,0 +1,93 @@
+# =============================================================================
+# Triton Model Config - churn_v1 (continuous model for production traffic)
+# =============================================================================
+# - Runs on multiple GPUs for high throughput
+# - Uses TensorRT for inference optimization
+# - Dynamic batching enabled for efficient request handling
+# - Instance groups distributed across GPU devices
+# -----------------------------------------------------------------------------
+name: "churn_v1"
+platform: "onnxruntime_onnx"
+max_batch_size: 128
+
+input [
+  {
+    name: "tenure_input"
+    data_type: TYPE_INT32
+    dims: [1]
+    reshape { shape: [1] }
+  },
+  {
+    name: "monthly_charges_input"
+    data_type: TYPE_FP32
+    dims: [1]
+    reshape { shape: [1] }
+  },
+  {
+    name: "support_calls_input"
+    data_type: TYPE_INT32
+    dims: [1]
+    reshape { shape: [1] }
+  },
+  {
+    name: "contract_input"
+    data_type: TYPE_FP32
+    dims: [1]
+    reshape { shape: [1] }
+  },
+  {
+    name: "internet_service_input"
+    data_type: TYPE_FP32
+    dims: [1]
+    reshape { shape: [1] }
+  }
+]
+
+output [
+  {
+    name: "churn_prediction"
+    data_type: TYPE_INT64
+    dims: [1]
+  },
+  {
+    name: "churn_probability"
+    data_type: TYPE_FP32
+    dims: [1]
+  }
+]
+
+instance_group [
+  {
+    kind: KIND_GPU
+    count: 2
+    gpus: [0]
+  },
+  {
+    kind: KIND_GPU
+    count: 1
+    gpus: [1]
+  }
+]
+
+dynamic_batching {
+  preferred_batch_size: [1, 8, 16, 32, 64, 128]
+  max_queue_delay_microseconds: 50000
+}
+
+optimization {
+  execution_acceleration [
+    {
+      name: "tensorrt"
+      parameters {
+        key: "precision_mode"
+        value: {
+          type: STRING
+          string_value: "FP16"
+        }
+      }
+    }
+  ]
+}
+
+# Version policy: load only version 1
+version_policy: { latest: 1 }

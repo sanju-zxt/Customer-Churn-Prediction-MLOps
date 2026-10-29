@@ -1,0 +1,83 @@
+# =============================================================================
+# Prometheus Configuration - Scrape targets and alert rules
+# =============================================================================
+global:
+  scrape_interval: 15s
+  scrape_timeout: 10s
+  evaluation_interval: 15s
+  external_labels:
+    monitor: "churn-monitoring"
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - "churn-alertmanager:9093"
+      timeout: 10s
+      api_version: v2
+
+rule_files:
+  - "churn-alerts.yml"
+
+scrape_configs:
+  # ---- Backend Service ----
+  - job_name: "churn-backend"
+    static_configs:
+      - targets: ["backend:8000"]
+    metrics_path: "/metrics"
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+    metric_relabel_configs:
+      - source_labels: [__name__]
+        regex: "(go_|promhttp_).*"
+        action: drop
+    sample_limit: 10000
+
+  # ---- Uvicorn Metrics ----
+  - job_name: "uvicorn"
+    static_configs:
+      - targets: ["backend:8000"]
+    metrics_path: "/metrics"
+
+  # ---- Triton Inference Server ----
+  - job_name: "churn-triton"
+    static_configs:
+      - targets: ["triton:8002"]
+    metrics_path: "/metrics"
+
+  # ---- Prometheus Self-Monitoring ----
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  # ---- Node Exporter ----
+  - job_name: "node-exporter"
+    static_configs:
+      - targets: ["node-exporter:9100"]
+
+  # ---- GPU Metrics via nvidia-dcgm-exporter ----
+  - job_name: "gpu-monitoring"
+    static_configs:
+      - targets: ["dcgm-exporter:9400"]
+
+  # ---- PostgreSQL ----
+  - job_name: "postgres"
+    static_configs:
+      - targets: ["postgres:9187"]
+
+  # ---- Redis ----
+  - job_name: "redis"
+    static_configs:
+      - targets: ["redis-exporter:9121"]
+
+  # ---- Grafana Loki ----
+  - job_name: "loki"
+    static_configs:
+      - targets: ["loki:3100"]
+
+  # ---- MLflow ----
+  - job_name: "mlflow"
+    static_configs:
+      - targets: ["mlflow:5000"]
+    metrics_path: "/metrics"
